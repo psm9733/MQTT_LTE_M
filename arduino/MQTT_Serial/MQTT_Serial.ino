@@ -1,4 +1,6 @@
 const int modem_onoff_reset_pin = 2;
+const int gate_on_pin = 3;
+const int gate_off_pin = 4;
 int pub_time_term = 1 * 1; //(mean of 1 is one min)
 unsigned long pre_time;
 boolean lock = true;
@@ -65,10 +67,16 @@ void MessageFilter(String message) {
         }else if(message.startsWith("+QMTRECV")){
             message.trim();
             if(message.endsWith("\"+OPEN\"")){
+                digitalWrite(gate_on_pin, HIGH);
+                delay(200);
+                digitalWrite(gate_on_pin, LOW);
                 if(io_mode == true){
                     Serial.println("gate open");      
                 }
             }else if(message.endsWith("\"+CLOSE\"")){
+                digitalWrite(gate_off_pin, HIGH);
+                delay(200);
+                digitalWrite(gate_off_pin, LOW);
                 if(io_mode == true){
                     Serial.println("gate close");      
                 }
@@ -80,7 +88,10 @@ void MessageFilter(String message) {
 void setup() {
     Serial.begin(9600);
     Serial1.begin(115200);
-    pinMode(modem_onoff_reset_pin, HIGH);
+    pinMode(modem_onoff_reset_pin, OUTPUT);
+    pinMode(gate_on_pin, OUTPUT);
+    pinMode(gate_off_pin, OUTPUT);
+    digitalWrite(modem_onoff_reset_pin, HIGH);
     if(io_mode == true){
         Serial.println("board setup");      
     }
