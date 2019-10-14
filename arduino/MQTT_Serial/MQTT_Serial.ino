@@ -1,22 +1,48 @@
 const int modem_onoff_reset_pin = 2;
 const int gate_on_pin = 3;
 const int gate_off_pin = 4;
-int pub_time_term = 1 * 1; //(mean of 1 is one min)
+int pub_time_term = 1 * 60; //(mean of 1 is one min)
 unsigned long pre_time;
 boolean lock = true;
 boolean io_mode = true;
+boolean mqtt_ready = false;
 String mqttip = "\"broker.hivemq.com\"";
 String mqttport = "1883";
 String id = "\"testid\"";
 String username = "\"hansung\"";
 String password = "\"hansung2019\"";
-String sub_topic = "\"command/gate/01012345678\"";
-String pub_topic = "\"status/gate/01012345678\"";
+String sub_topic = "\"command/gate/";
+String pub_topic = "\"status/gate/";
 
 void Modem_reset(){
+    mqtt_ready = false;
+    if(io_mode == true){
+        Serial.println("Called: Modem_reset()");
+        Serial.println("Send AT-Command: AT+CNUM");
+    }
     digitalWrite(modem_onoff_reset_pin, LOW);
     delay(200);
     digitalWrite(modem_onoff_reset_pin, HIGH);
+}
+
+void Model_at_cnum(){
+    if(io_mode == true){
+        Serial.println("Called: Model_at_cnum()");
+        Serial.println("Send AT-Command: AT+CNUM");
+    }
+    Serial1.println("AT+CNUM");
+}
+
+void Mqtt_init_topic(String message){
+    if(io_mode == true){
+        Serial.println("Called: Mqtt_init_topic()");
+    }
+    int index1 = message.indexOf("\"") + 1;
+    int index2 = message.indexOf("\"", index1);
+    String modem_number = message.substring(index1, index2) + "\"";
+    sub_topic += modem_number;
+    pub_topic += modem_number;
+    mqtt_ready = true;
 }
 
 void MqttOpen(String ip, String port){
@@ -58,27 +84,36 @@ void MessageFilter(String message) {
     if(message.startsWith("ERROR")){
         Modem_reset();
     }else{
-        if(message.startsWith("+QMTOPEN:")){
-            MqttConn(id, username, password);
-        }else if(message.startsWith("+QMTCONN:")){
-            Sub(sub_topic);
-        }else if(message.startsWith("+QMTSUB:")){
-            Pub(pub_topic, "OK");
-        }else if(message.startsWith("+QMTRECV")){
-            message.trim();
-            if(message.endsWith("\"+OPEN\"")){
-                digitalWrite(gate_on_pin, HIGH);
-                delay(200);
-                digitalWrite(gate_on_pin, LOW);
-                if(io_mode == true){
-                    Serial.println("gate open");      
-                }
-            }else if(message.endsWith("\"+CLOSE\"")){
-                digitalWrite(gate_off_pin, HIGH);
-                delay(200);
-                digitalWrite(gate_off_pin, LOW);
-                if(io_mode == true){
-                    Serial.println("gate close");      
+      
+        if(message.startsWith("+CPIN:")){
+            Model_at_cnum();
+        }else if(message.startsWith("+CNUM:")){
+            Mqtt_init_topic(message);
+        }
+
+        if(mqtt_ready == true){
+            if(message.startsWith("+QMTOPEN:")){
+                MqttConn(id, username, password);
+            }else if(message.startsWith("+QMTCONN:")){
+                Sub(sub_topic);
+            }else if(message.startsWith("+QMTSUB:")){
+                Pub(pub_topic, "ok");
+            }else if(message.startsWith("+QMTRECV")){
+                message.trim();
+                if(message.endsWith("\"open\"")){
+                    digitalWrite(gate_on_pin, HIGH);
+                    delay(200);
+                    digitalWrite(gate_on_pin, LOW);
+                    if(io_mode == true){
+                        Serial.println("gate open");      
+                    }
+                }else if(message.endsWith("\"close\"")){
+                    digitalWrite(gate_off_pin, HIGH);
+                    delay(200);
+                    digitalWrite(gate_off_pin, LOW);
+                    if(io_mode == true){
+                        Serial.println("gate close");      
+                    }
                 }
             }
         }
@@ -110,9 +145,9 @@ void loop() {
         lock = true;
     }
 
-    if(Serial.available()){
-        Serial1.write(Serial.read());
-    }
+    //if(Serial.available()){
+    //    Serial1.write(Serial.read());
+    //}
     if(Serial1.available()) {
         String message = Serial1.readStringUntil('\n');
         if(io_mode == true){
