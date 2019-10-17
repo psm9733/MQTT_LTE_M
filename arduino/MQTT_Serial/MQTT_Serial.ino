@@ -10,14 +10,12 @@ unsigned long previousMillis = 0;
 boolean lock = true;
 boolean io_mode = true;
 boolean mqtt_ready = false;
-String mqttip = "\"broker.hivemq.com\"";
+String mqttip = "221.155.134.216";
 String mqttport = "1883";
-String id = "\"testid\"";
-String username = "\"hansung\"";
-String password = "\"hansung2019\"";
+String username = "\"sangmin\"";
+String password = "\"sangmin2019\"";
 String sub_topic = "\"command/gate/";
 String pub_topic = "\"status/gate/";
-String administrator = "01027079417";
 String modem_number;
 String sender;
 
@@ -35,6 +33,7 @@ void Modem_reset(){
 void Modem_init(){
     if(io_mode == true){
         Serial.println("Called: Modem_init()");
+        Serial.println("Send AT-Command: AT+CMGF=1");
     }
     sub_topic = "\"command/gate/";
     pub_topic = "\"status/gate/";
@@ -54,10 +53,6 @@ void Modem_init(){
         }
     }
     mqttip = data;
-    if(io_mode == true){
-        Serial.println("Called: Modem_init()");
-        Serial.println("Send AT-Command: AT+CMGF=1");
-    }
     Serial1.println("AT+CMGF=1");
 }
 
@@ -122,7 +117,8 @@ void Mqtt_conn(String id, String username, String pass){
         Serial.println("Called: MqttConn()");
         Serial.println("Send AT-Command: AT+QMTCONN");
     }
-        Serial1.println("AT+QMTCONN=0," + id + "," + username + "," + pass);
+        //Serial1.println("AT+QMTCONN=0," + id + "," + username + "," + pass);
+        Serial1.println("AT+QMTCONN=0,\"" +  id + "\"");
 }
 
 void Pub(String topic, String message) {
@@ -191,14 +187,13 @@ void MessageFilter(String message) {
             String addr = message.substring(index, message.length());
             addr.trim();
             Change_ip(addr);
-            //Modem_reset();
         }else if(message.startsWith("+status")){
             String info = "status: ok,\nmodem number: " + modem_number + ",\n" + "Mqtt IPaddr: " + mqttip;
             Modem_cmgs(info);
         }
         if(mqtt_ready == true){
             if(message.startsWith("+QMTOPEN:")){
-                Mqtt_conn(id, username, password);
+                Mqtt_conn(modem_number, username, password);
             }else if(message.startsWith("+QMTCONN:")){
                 Sub(sub_topic);
             }else if(message.startsWith("+QMTSUB:")){
