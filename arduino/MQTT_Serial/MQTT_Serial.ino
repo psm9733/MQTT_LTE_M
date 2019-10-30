@@ -3,11 +3,21 @@
 const int modem_onoff_reset_pin = 2;
 const int gate_on_pin = 3;
 const int gate_off_pin = 4;
+const int infrared_vcc1 = 8;
+const int infrared_pin1 = A0;
+const int infrared_vcc2 = 9;
+const int infrared_pin2 = A1;
+const int close_threshold = 1000;
+const int open_threshold = 5;
 int memory_length = 128;
 int pub_time_term = 1 * 60; //(mean of 1 is one min)
+int distance1 = 0;
+int distance2 = 0;
 unsigned long pre_time;
 unsigned long previousMillis = 0;
-boolean lock = true;
+boolean gate_status_open_lock = true;
+boolean gate_status_close_lock = true;
+boolean time_lock = true;
 boolean io_mode = true;
 boolean mqtt_ready = false;
 String mqttip = "221.155.134.216";
@@ -117,11 +127,11 @@ void Mqtt_conn(String id, String username, String pass){
         Serial.println("Called: MqttConn()");
         Serial.println("Send AT-Command: AT+QMTCONN");
     }
-        //Serial1.println("AT+QMTCONN=0," + id + "," + username + "," + pass);
-        Serial1.println("AT+QMTCONN=0,\"" +  id + "\"");
+        Serial1.println("AT+QMTCONN=0,\"" + id + "\"," + username + "," + pass);
+        //Serial1.println("AT+QMTCONN=0,\"" +  id + "\"");
 }
 
-void Pub(String topic, String message) {
+void Pub(String topic, String message){
     if(io_mode == true){
         Serial.println("Called: Pub()");
         Serial.println("Send AT-Command: AT+QMTPUB");
@@ -132,7 +142,7 @@ void Pub(String topic, String message) {
     Serial1.println(message + "\x1a");
 }
 
-void Sub(String topic) {
+void Sub(String topic){
     if (io_mode == true){
         Serial.println("Called: Sub()");
         Serial.println("Send AT-Command: AT+QMTSUB");
@@ -164,7 +174,7 @@ boolean is_memory(){
     return false;
 }
 
-void MessageFilter(String message) {
+void MessageFilter(String message){
     if(message.startsWith("ERROR")){
         Modem_reset();
     }else{
@@ -207,6 +217,7 @@ void MessageFilter(String message) {
                     if(io_mode == true){
                         Serial.println("gate open");      
                     }
+                    gate_status_open_lock = false;
                 }else if(message.endsWith("\"close\"")){
                     digitalWrite(gate_off_pin, HIGH);
                     delay(200);
@@ -214,48 +225,78 @@ void MessageFilter(String message) {
                     if(io_mode == true){
                         Serial.println("gate close");      
                     }
+                    gate_status_close_lock = false;
                 }
             }
         }
     }
 }
 
-void setup() {
+void setup(){
     Serial.begin(9600);
     Serial1.begin(115200);
     pinMode(modem_onoff_reset_pin, OUTPUT);
     pinMode(gate_on_pin, OUTPUT);
     pinMode(gate_off_pin, OUTPUT);
+    pinMode(infrared_vcc1, OUTPUT);
+    pinMode(infrared_vcc2, OUTPUT);
+    pinMode(infrared_pin1, INPUT);
+    pinMode(infrared_pin2, INPUT);
     digitalWrite(modem_onoff_reset_pin, HIGH);
+    digitalWrite(infrared_vcc1, HIGH);
+    digitalWrite(infrared_vcc2, HIGH);
+    time_lock = true;
+    gate_status_open_lock = true;
+    gate_status_close_lock = true;
     if(io_mode == true){
         Serial.println("board setup");      
     }
     Modem_reset();
 }
 
-void loop() {
-    if (lock == true){
+void loop(){
+    if(time_lock == true){
         pre_time = millis();
-        lock = false;
-    }else if(((millis() - pre_time)/1000)/60 >= pub_time_term && lock == false){
+        time_lock = false;
+    }else if(((millis() - pre_time)/1000)/60 >= pub_time_term && time_lock == false){
         if(io_mode == true){
             Serial.println("time = " + String(millis() / 60000) + " min");
         }
         Pub(pub_topic, "ok");
-        lock = true;
+        time_lock = true;
     }
 
     if(Serial.available()){
         Serial1.write(Serial.read());
     }
     
-    if(Serial1.available()) {
+    if(Serial1.available()){
         String message = Serial1.readStringUntil('\n');
         if(io_mode == true){
-            Serial.print(message);
-            Serial.print('\n'); 
+            Serial.println(message);
         }
         MessageFilter(message);
     }
-    
+
+    if(gate_status_open_lock == false){
+      int voltage1 = map(analogRead(infrared_pin1), 0, 1023, 0, 5000);
+      int voltage2 = map(analogRead(infrared_pin2), 0, 1023, 0, 5000);
+//      Serial.print("v1: " + String(voltage1) +  ", ");
+//      Serial.println("v2: " + String(voltage2) +  ", ");
+      if(voltage1 <= open_threshold && voltage2 <= open_threshold){     //open
+          Pub(pub_topic, "ok_opened");
+          gate_status_open_lock = true;
+      }
+      delay(200);
+    }else if(gate_status_close_lock == false){
+      int voltage1 = map(analogRead(infrared_pin1), 0, 1023, 0, 5000);
+      int voltage2 = map(analogRead(infrared_pin2), 0, 1023, 0, 5000);
+//      Serial.print("v1: " + String(voltage1) +  ", ");
+//      Serial.println("v2: " + String(voltage2) +  ", ");
+      if(voltage1 >= close_threshold && voltage2 >= close_threshold){     //close
+          Pub(pub_topic, "ok_closed");
+          gate_status_close_lock = true;
+      }
+      delay(200);
+    }
 }
