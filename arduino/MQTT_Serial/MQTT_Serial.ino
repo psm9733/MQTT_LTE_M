@@ -9,6 +9,7 @@ const int infrared_vcc2 = 9;
 const int infrared_pin2 = A1;
 const int close_threshold = 1000;
 const int open_threshold = 5;
+const int relay_vcc = 6;
 int memory_length = 128;
 int pub_time_term = 1 * 60; //(mean of 1 is one min)
 int distance1 = 0;
@@ -127,8 +128,8 @@ void Mqtt_conn(String id, String username, String pass){
         Serial.println("Called: MqttConn()");
         Serial.println("Send AT-Command: AT+QMTCONN");
     }
-        Serial1.println("AT+QMTCONN=0,\"" + id + "\"," + username + "," + pass);
-        //Serial1.println("AT+QMTCONN=0,\"" +  id + "\"");
+        //Serial1.println("AT+QMTCONN=0,\"" + id + "\"," + username + "," + pass);
+        Serial1.println("AT+QMTCONN=0,\"" +  id + "\"");
 }
 
 void Pub(String topic, String message){
@@ -212,7 +213,7 @@ void MessageFilter(String message){
                 message.trim();
                 if(message.endsWith("\"open\"")){
                     digitalWrite(gate_on_pin, HIGH);
-                    delay(200);
+                    delay(500);
                     digitalWrite(gate_on_pin, LOW);
                     if(io_mode == true){
                         Serial.println("gate open");      
@@ -220,7 +221,7 @@ void MessageFilter(String message){
                     gate_status_open_lock = false;
                 }else if(message.endsWith("\"close\"")){
                     digitalWrite(gate_off_pin, HIGH);
-                    delay(200);
+                    delay(500);
                     digitalWrite(gate_off_pin, LOW);
                     if(io_mode == true){
                         Serial.println("gate close");      
@@ -242,9 +243,13 @@ void setup(){
     pinMode(infrared_vcc2, OUTPUT);
     pinMode(infrared_pin1, INPUT);
     pinMode(infrared_pin2, INPUT);
+    pinMode(relay_vcc, OUTPUT);
     digitalWrite(modem_onoff_reset_pin, HIGH);
     digitalWrite(infrared_vcc1, HIGH);
     digitalWrite(infrared_vcc2, HIGH);
+    digitalWrite(relay_vcc, HIGH);
+    digitalWrite(gate_on_pin, LOW);
+    digitalWrite(gate_off_pin, LOW);
     time_lock = true;
     gate_status_open_lock = true;
     gate_status_close_lock = true;
@@ -281,8 +286,8 @@ void loop(){
     if(gate_status_open_lock == false){
       int voltage1 = map(analogRead(infrared_pin1), 0, 1023, 0, 5000);
       int voltage2 = map(analogRead(infrared_pin2), 0, 1023, 0, 5000);
-//      Serial.print("v1: " + String(voltage1) +  ", ");
-//      Serial.println("v2: " + String(voltage2) +  ", ");
+      //Serial.print("v1: " + String(voltage1) +  ", ");
+      //Serial.println("v2: " + String(voltage2) +  ", ");
       if(voltage1 <= open_threshold && voltage2 <= open_threshold){     //open
           Pub(pub_topic, "ok_opened");
           gate_status_open_lock = true;
@@ -291,8 +296,8 @@ void loop(){
     }else if(gate_status_close_lock == false){
       int voltage1 = map(analogRead(infrared_pin1), 0, 1023, 0, 5000);
       int voltage2 = map(analogRead(infrared_pin2), 0, 1023, 0, 5000);
-//      Serial.print("v1: " + String(voltage1) +  ", ");
-//      Serial.println("v2: " + String(voltage2) +  ", ");
+      //Serial.print("v1: " + String(voltage1) +  ", ");
+      //Serial.println("v2: " + String(voltage2) +  ", ");
       if(voltage1 >= close_threshold && voltage2 >= close_threshold){     //close
           Pub(pub_topic, "ok_closed");
           gate_status_close_lock = true;
