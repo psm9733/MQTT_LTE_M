@@ -62,6 +62,8 @@ void Modem_init(){
                 break;
             }
         }
+    }else{
+      Change_ip(mqttip);
     }
     mqttip = data;
     Serial1.println("AT+CMGF=1");
